@@ -3,7 +3,7 @@
 
 Инструкция по запуску проекта:
 - склонировать репозиторий
-- активировать виртуальную среду venv
+- активировать виртуальную среду venv `.venv\Scripts\Activate.ps1`
 - из корня проекта запустить `pip install -r requirements.txt`
 - `cd .\carpool_project\`
 - `python manage.py migrate`
