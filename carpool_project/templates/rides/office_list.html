@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}Офисы — ОфисРайд{% endblock %}
+{% block nav_offices %}active{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-building text-primary me-2"></i>Офисы компании</h2>
+            <p class="text-muted mb-0">Все локации на карте</p>
+        </div>
+        {% if user.is_staff or user.profile.is_admin %}
+        <a href="{% url 'office_create' %}" class="btn btn-primary fw-semibold">
+            <i class="bi bi-plus-circle me-2"></i>Добавить офис
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header py-3">
+                    <i class="bi bi-map text-primary me-2"></i><strong>Карта офисов</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div id="officesMap" style="height: 500px; border-radius: 0 0 12px 12px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            {% if offices %}
+                <div class="d-flex flex-column gap-3">
+                    {% for office in offices %}
+                    <div class="card office-card office-item" data-lat="{{ office.lat }}" data-lon="{{ office.lon }}" style="cursor:pointer">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="d-flex gap-3 align-items-start flex-grow-1">
+                                    <div style="font-size:2.5rem;line-height:1;flex-shrink:0">🏢</div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="fw-bold mb-1">{{ office.name }}</h6>
+                                        <div class="text-muted small mb-1">
+                                            <i class="bi bi-geo-alt me-1"></i>{{ office.city }}
+                                        </div>
+                                        <div class="text-muted small mb-1">
+                                            {{ office.address }}
+                                        </div>
+                                        {% if office.description %}
+                                        <div class="small text-secondary">{{ office.description|truncatechars:80 }}</div>
+                                        {% endif %}
+                                        <div class="mt-2">
+                                            <span class="badge {% if office.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                                {% if office.is_active %}Активен{% else %}Неактивен{% endif %}
+                                            </span>
+                                            <span class="badge bg-light text-dark ms-1">
+                                                <i class="bi bi-car-front me-1"></i>{{ office.rides_count }} поездок
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% if user.is_staff or user.profile.is_admin %}
+                                <div class="d-flex flex-column gap-1 ms-2">
+                                    <a href="{% url 'office_edit' office.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'office_delete' office.pk %}" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div style="font-size:4rem">🏢</div>
+                        <h5 class="mt-3 fw-bold">Офисов пока нет</h5>
+                        <p class="text-muted">Администратор ещё не добавил офисы</p>
+                        {% if user.is_staff or user.profile.is_admin %}
+                        <a href="{% url 'office_create' %}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i>Добавить первый офис
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const map = L.map('officesMap').setView([62, 45], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+}).addTo(map);
+
+const officeIcon = L.divIcon({
+    html: '<div style="background:#2563eb;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.3)">🏢</div>',
+    iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36], className: ''
+});
+
+const markers = {};
+
+{% for office in offices %}
+const marker{{ office.pk }} = L.marker([{{ office.lat }}, {{ office.lon }}], {icon: officeIcon})
+    .bindPopup(`
+        <div style="min-width:180px">
+            <div class="custom-popup-office">
+                <strong>{{ office.name }}</strong><br>
+                <span class="text-muted small">{{ office.city }}</span><br>
+                <span class="small">{{ office.address }}</span><br>
+                {% if office.description %}<span class="small text-secondary">{{ office.description|truncatechars:60 }}</span>{% endif %}
+                <br><a href="{% url 'ride_list' %}?office={{ office.pk }}" class="btn btn-sm btn-primary mt-2" style="font-size:0.75rem">
+                    Поездки в этот офис
+                </a>
+            </div>
+        </div>
+    `, {maxWidth: 250})
+    .addTo(map);
+markers[{{ office.pk }}] = marker{{ office.pk }};
+{% endfor %}
+
+document.querySelectorAll('.office-item').forEach(item => {
+    item.addEventListener('click', () => {
+        const lat = parseFloat(item.dataset.lat);
+        const lon = parseFloat(item.dataset.lon);
+        map.flyTo([lat, lon], 15, {duration: 1.2});
+    });
+});
+
+{% if offices %}
+const bounds = [
+    {% for office in offices %}[{{ office.lat }}, {{ office.lon }}],{% endfor %}
+];
+if (bounds.length > 0) map.fitBounds(bounds, {padding: [40, 40]});
+{% endif %}
+</script>
+{% endblock %}

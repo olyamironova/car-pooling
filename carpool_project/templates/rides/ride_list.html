@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Поездки — ОфисРайд{% endblock %}
+{% block nav_rides %}active{% endblock %}
+{% load l10n %}
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-car-front text-primary me-2"></i>Поездки</h2>
+            <p class="text-muted mb-0">Найдите попутчика в нужный офис</p>
+        </div>
+        {% if user.is_authenticated and user.profile.is_driver or user.is_staff %}
+        <a href="{% url 'ride_create' %}" class="btn btn-primary fw-semibold">
+            <i class="bi bi-plus-circle me-2"></i>Создать поездку
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    {{ filter_form.office.label_tag }}
+                    {{ filter_form.office }}
+                </div>
+                <div class="col-md-3">
+                    {{ filter_form.city.label_tag }}
+                    {{ filter_form.city }}
+                </div>
+                <div class="col-md-3">
+                    {{ filter_form.date.label_tag }}
+                    {{ filter_form.date }}
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search me-1"></i>Найти
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if rides %}
+        <div class="row g-3">
+            {% for item in rides %}
+            {% with ride=item.ride %}
+            <div class="col-md-6 col-lg-4">
+                <div class="ride-card p-3 h-100 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="passenger-avatar" style="background: hsl({{ forloop.counter|add:100 }}deg, 60%, 45%)">
+                                {{ ride.driver.first_name|first|default:ride.driver.username|first|upper }}
+                            </div>
+                            <div>
+                                <div class="fw-semibold">{{ ride.driver.get_full_name|default:ride.driver.username }}</div>
+                                <small class="text-muted">
+                                    {% if ride.driver.profile.car_model %}
+                                        <i class="bi bi-car-front me-1"></i>{{ ride.driver.profile.car_model }}
+                                    {% else %}
+                                        <i class="bi bi-star-fill text-warning me-1"></i>{{ ride.driver.profile.rating }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        <span class="badge status-{{ ride.status }}">{{ ride.get_status_display }}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-geo-alt text-danger me-2"></i>
+                            <span class="small">{{ ride.departure_address|truncatechars:40 }}</span>
+                        </div>
+                        <div class="d-flex align-items-center mb-1 text-muted" style="margin-left:20px">
+                            <small>│</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-building text-primary me-2"></i>
+                            <span class="small fw-semibold">{{ ride.office.name }}</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="bg-light rounded p-2 text-center">
+                                <div class="small text-muted">Время</div>
+                                <div class="fw-semibold small">{{ ride.departure_time|date:"d.m.y H:i" }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-light rounded p-2 text-center">
+                                <div class="small text-muted">Мест</div>
+                                <div class="fw-semibold small {% if item.free_seats == 0 %}text-danger{% else %}text-success{% endif %}">
+                                    {{ item.free_seats }} / {{ ride.available_seats }}
+                                </div>
+                            </div>
+                        </div>
+                        {% if ride.route_distance_km %}
+                        <div class="col-6">
+                            <div class="bg-light rounded p-2 text-center">
+                                <div class="small text-muted">Расстояние</div>
+                                <div class="fw-semibold small">{{ ride.route_distance_km }} км</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if ride.route_duration_min %}
+                        <div class="col-6">
+                            <div class="bg-light rounded p-2 text-center">
+                                <div class="small text-muted">Время в пути</div>
+                                <div class="fw-semibold small">~{{ ride.route_duration_min|floatformat:0 }} мин</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        {% for i in "123456"|make_list %}
+                            {% if forloop.counter <= item.passengers_count %}
+                                <span class="seat-indicator occupied" title="Занято">👤</span>
+                            {% elif forloop.counter <= ride.available_seats %}
+                                <span class="seat-indicator free" title="Свободно">💺</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if ride.departure_city %}
+                    <div class="mb-2">
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-geo-alt me-1"></i>{{ ride.departure_city }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if ride.comment %}
+                    <div class="bg-light rounded p-2 mb-3">
+                        <small class="text-muted"><i class="bi bi-chat-quote me-1"></i>{{ ride.comment|truncatechars:70 }}</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="mt-auto">
+                        <a href="{% url 'ride_detail' ride.pk %}" class="btn btn-outline-primary w-100 fw-semibold">
+                            <i class="bi bi-eye me-2"></i>Подробнее
+                        </a>
+                        {% if user.is_authenticated and item.can_join %}
+                        <a href="{% url 'ride_detail' ride.pk %}" class="btn btn-success w-100 fw-semibold mt-2">
+                            <i class="bi bi-plus-circle me-2"></i>Присоединиться
+                        </a>
+                        {% elif user.is_authenticated and not item.can_join and item.join_reason != 'OK' %}
+                        <button class="btn btn-outline-secondary w-100 mt-2 fw-semibold" disabled
+                                title="{{ item.join_reason }}">
+                            <i class="bi bi-lock me-2"></i>Недоступно
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <div style="font-size:4rem" class="mb-3">🔍</div>
+            <h4 class="fw-bold">Поездки не найдены</h4>
+            <p class="text-muted">Попробуйте изменить фильтры или создайте свою поездку</p>
+            {% if user.is_authenticated and user.profile.is_driver %}
+            <a href="{% url 'ride_create' %}" class="btn btn-primary btn-lg mt-2">
+                <i class="bi bi-plus-circle me-2"></i>Создать поездку
+            </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

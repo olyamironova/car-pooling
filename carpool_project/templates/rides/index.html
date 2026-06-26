@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+{% block title %}ОфисРайд — Главная{% endblock %}
+{% block nav_index %}active{% endblock %}
+
+{% block content %}
+<div class="hero-section mb-4">
+    <div class="container position-relative">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-5 fw-bold mb-3">
+                    Едем в офис <br><span style="color:#60a5fa">вместе! 🚗</span>
+                </h1>
+                <p class="lead mb-4" style="color:rgba(255,255,255,0.8)">
+                    Совместные поездки с коллегами — экономьте время, деньги и помогайте природе
+                </p>
+                <div class="d-flex gap-3 flex-wrap">
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'ride_list' %}" class="btn btn-light btn-lg fw-semibold">
+                            <i class="bi bi-search me-2"></i>Найти поездку
+                        </a>
+                        {% if user.profile.is_driver or user.profile.is_admin or user.is_staff %}
+                        <a href="{% url 'ride_create' %}" class="btn btn-outline-light btn-lg fw-semibold">
+                            <i class="bi bi-plus-circle me-2"></i>Создать поездку
+                        </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'register' %}" class="btn btn-light btn-lg fw-semibold">
+                            <i class="bi bi-person-plus me-2"></i>Присоединиться
+                        </a>
+                        <a href="{% url 'login' %}" class="btn btn-outline-light btn-lg fw-semibold">
+                            Войти
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-6 text-center d-none d-lg-block">
+                <div style="font-size:6rem; filter:drop-shadow(0 8px 20px rgba(0,0,0,0.4))">
+                    🗺️
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card">
+                <div class="stat-number">{{ offices|length }}</div>
+                <div class="small mt-1 opacity-75">Офисов</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #059669, #047857)">
+                <div class="stat-number">{{ active_rides|length }}</div>
+                <div class="small mt-1 opacity-75">Поездок сегодня</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #d97706, #b45309)">
+                <div class="stat-number">🌍</div>
+                <div class="small mt-1 opacity-75">Россия</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card" style="background: linear-gradient(135deg, #7c3aed, #6d28d9)">
+                <div class="stat-number">🤝</div>
+                <div class="small mt-1 opacity-75">Вместе удобнее</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <i class="bi bi-map text-primary me-2"></i>
+                        <strong>Карта офисов и поездок</strong>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge bg-primary"><i class="bi bi-building me-1"></i>Офис</span>
+                        <span class="badge bg-success"><i class="bi bi-car-front me-1"></i>Поездка</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="mainMap" style="height: 500px; border-radius: 0 0 12px 12px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header py-3">
+                    <i class="bi bi-building text-primary me-2"></i>
+                    <strong>Наши офисы</strong>
+                </div>
+                <div class="card-body p-0">
+                    {% if offices %}
+                        <div class="list-group list-group-flush">
+                            {% for office in offices %}
+                            <div class="list-group-item px-3 py-2 office-item"
+                                 data-lat="{{ office.lat }}" data-lon="{{ office.lon }}"
+                                 style="cursor:pointer">
+                                <div class="d-flex align-items-start gap-2">
+                                    <div style="font-size:1.5rem">🏢</div>
+                                    <div>
+                                        <div class="fw-semibold small">{{ office.name }}</div>
+                                        <div class="text-muted" style="font-size:0.75rem">
+                                            <i class="bi bi-geo-alt me-1"></i>{{ office.city }}
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.72rem">
+                                            {{ office.address|truncatechars:45 }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="p-3 text-center text-muted">
+                            <i class="bi bi-building fs-3 mb-2 d-block"></i>
+                            Офисы ещё не добавлены
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-clock text-primary me-2"></i>
+                        <strong>Ближайшие поездки</strong>
+                    </div>
+                    <a href="{% url 'ride_list' %}" class="btn btn-sm btn-outline-primary">
+                        Все <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    {% if active_rides %}
+                        <div class="list-group list-group-flush">
+                            {% for ride in active_rides %}
+                            <a href="{% url 'ride_detail' ride.pk %}" class="list-group-item list-group-item-action px-3 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="fw-semibold small">
+                                            {{ ride.driver.get_full_name|default:ride.driver.username }}
+                                            <span class="badge ms-1 {% if ride.status == 'active' %}bg-success{% else %}bg-primary{% endif %}" style="font-size:0.6rem">
+                                                {{ ride.get_status_display }}
+                                            </span>
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.75rem">
+                                            <i class="bi bi-geo-alt me-1"></i>→ {{ ride.office.name }}
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.72rem">
+                                            <i class="bi bi-clock me-1"></i>{{ ride.departure_time|date:"d.m H:i" }}
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div style="font-size:0.75rem" class="text-success fw-bold">
+                                            {{ ride.get_free_seats }} / {{ ride.available_seats }}
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.65rem">мест</div>
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="p-3 text-center text-muted">
+                            <i class="bi bi-car-front fs-3 mb-2 d-block"></i>
+                            Нет активных поездок
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-2">
+        <div class="col-12"><h4 class="fw-bold text-center mb-0">Как это работает?</h4></div>
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <div style="font-size:3rem" class="mb-2">📍</div>
+                <h6 class="fw-bold">1. Водитель создаёт поездку</h6>
+                <p class="text-muted small mb-0">Указывает откуда едет, в какой офис и когда</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <div style="font-size:3rem" class="mb-2">🔍</div>
+                <h6 class="fw-bold">2. Пассажир находит поездку</h6>
+                <p class="text-muted small mb-0">Фильтрует по офису, городу и времени, проверяет маршрут</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center p-3">
+                <div style="font-size:3rem" class="mb-2">🚗</div>
+                <h6 class="fw-bold">3. Едут вместе</h6>
+                <p class="text-muted small mb-0">Отслеживают поездку в реальном времени на карте</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const officesData = {{ offices_json|safe }};
+const ridesData = {{ rides_json|safe }};
+
+const map = L.map('mainMap').setView([62, 45], 4);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 19
+}).addTo(map);
+
+const officeIcon = L.divIcon({
+    html: '<div style="background:#2563eb;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white">🏢</div>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    className: ''
+});
+
+const rideIcon = L.divIcon({
+    html: '<div style="background:#10b981;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white">🚗</div>',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    className: ''
+});
+
+const officeLayers = {};
+officesData.forEach(office => {
+    const marker = L.marker([office.lat, office.lon], {icon: officeIcon})
+        .bindPopup(`
+            <div class="custom-popup-office">
+                <strong>🏢 ${office.name}</strong><br>
+                <small class="text-muted">${office.city}</small><br>
+                <small>${office.address}</small><br>
+                ${office.description ? `<small class="mt-1 d-block">${office.description}</small>` : ''}
+            </div>
+        `, {maxWidth: 250})
+        .addTo(map);
+    officeLayers[office.id] = marker;
+});
+
+ridesData.forEach(ride => {
+    const marker = L.marker([ride.departure_lat, ride.departure_lon], {icon: rideIcon})
+        .bindPopup(`
+            <div class="custom-popup-ride">
+                <strong>🚗 ${ride.driver}</strong><br>
+                → <strong>${ride.office_name}</strong><br>
+                <small>🕐 ${ride.departure_time}</small><br>
+                <small>💺 Свободно: <b>${ride.free_seats}</b> мест</small><br>
+                <a href="/rides/${ride.id}/" class="btn btn-sm btn-primary mt-2" style="font-size:0.75rem">
+                    Подробнее
+                </a>
+            </div>
+        `, {maxWidth: 220})
+        .addTo(map);
+
+    if (ride.departure_lat && ride.office_lat) {
+        L.polyline(
+            [[ride.departure_lat, ride.departure_lon], [ride.office_lat, ride.office_lon]],
+            {color: '#10b981', weight: 2, opacity: 0.6, dashArray: '6,4'}
+        ).addTo(map);
+    }
+});
+
+document.querySelectorAll('.office-item').forEach(item => {
+    item.addEventListener('click', () => {
+        const lat = parseFloat(item.dataset.lat);
+        const lon = parseFloat(item.dataset.lon);
+        map.flyTo([lat, lon], 14, {duration: 1.5});
+    });
+});
+</script>
+{% endblock %}

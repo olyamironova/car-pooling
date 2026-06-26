@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% block title %}Регистрация — ОфисРайд{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:600px;margin-top:2rem;margin-bottom:3rem">
+    <div class="text-center mb-4">
+        <div style="font-size:3rem">👋</div>
+        <h2 class="fw-bold">Создать аккаунт</h2>
+        <p class="text-muted">Присоединитесь к команде и начните ездить вместе</p>
+    </div>
+
+    <div class="card p-4">
+        <form method="post" id="registerForm">
+            {% csrf_token %}
+
+            <div class="mb-4">
+                <label class="form-label fw-bold">Я хочу:</label>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="role-card" id="role-passenger-card">
+                            <input type="radio" name="role" value="passenger" checked class="d-none" id="role-passenger">
+                            <div class="card text-center p-3 h-100 border-2" style="cursor:pointer;transition:all 0.2s" id="passenger-box">
+                                <div style="font-size:2.5rem">🧍</div>
+                                <div class="fw-semibold mt-1">Пассажир</div>
+                                <small class="text-muted">Присоединяюсь к поездкам</small>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="col-6">
+                        <label class="role-card" id="role-driver-card">
+                            <input type="radio" name="role" value="driver" class="d-none" id="role-driver">
+                            <div class="card text-center p-3 h-100 border-2" style="cursor:pointer;transition:all 0.2s" id="driver-box">
+                                <div style="font-size:2.5rem">🚗</div>
+                                <div class="fw-semibold mt-1">Водитель</div>
+                                <small class="text-muted">Создаю поездки</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            {% if form.errors %}
+            <div class="alert alert-danger">
+                {% for field, errors in form.errors.items %}
+                    {% for error in errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="row g-3 mb-3">
+                <div class="col-6">
+                    <label class="form-label fw-semibold">Имя</label>
+                    <input type="text" name="first_name" class="form-control" placeholder="Иван"
+                           value="{{ form.first_name.value|default:'' }}" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-semibold">Фамилия</label>
+                    <input type="text" name="last_name" class="form-control" placeholder="Петров"
+                           value="{{ form.last_name.value|default:'' }}" required>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Логин</label>
+                <input type="text" name="username" class="form-control" placeholder="Уникальный логин"
+                       value="{{ form.username.value|default:'' }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Email</label>
+                <input type="email" name="email" class="form-control" placeholder="ivan@company.ru"
+                       value="{{ form.email.value|default:'' }}">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Телефон</label>
+                <input type="text" name="phone" class="form-control" placeholder="+7 999 123-45-67"
+                       value="{{ form.phone.value|default:'' }}">
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6">
+                    <label class="form-label fw-semibold">Пароль</label>
+                    <input type="password" name="password1" class="form-control" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-semibold">Повторите пароль</label>
+                    <input type="password" name="password2" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="card border-0 mb-3" style="background:#f8fafc">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-geo-alt text-primary me-2"></i>Местоположение</h6>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ваш город</label>
+                        <input type="text" name="city" class="form-control" placeholder="Москва"
+                               value="{{ form.city.value|default:'' }}" id="cityInput">
+                        <small class="text-muted">Используется для определения доступных поездок</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Домашний адрес <small class="text-muted fw-normal">(необязательно)</small></label>
+                        <div class="input-group">
+                            <input type="text" name="home_address" class="form-control" placeholder="Улица, дом"
+                                   id="homeAddressInput" value="{{ form.home_address.value|default:'' }}">
+                            <button type="button" class="btn btn-outline-primary" onclick="geocodeHomeAddress()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" name="home_lat" id="homeLat">
+                        <input type="hidden" name="home_lon" id="homeLon">
+                    </div>
+                    <div id="geocodeStatus" class="small mt-1"></div>
+                </div>
+            </div>
+
+            <div id="driverFields" class="card border-0 mb-3 d-none" style="background:#eff6ff">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-car-front text-primary me-2"></i>Автомобиль</h6>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Модель</label>
+                            <input type="text" name="car_model" class="form-control" placeholder="Toyota Camry">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Гос. номер</label>
+                            <input type="text" name="car_plate" class="form-control" placeholder="А123БВ777">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Мест для пассажиров</label>
+                            <input type="number" name="car_seats" class="form-control" value="3" min="1" max="8">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 btn-lg fw-semibold">
+                <i class="bi bi-person-check me-2"></i>Зарегистрироваться
+            </button>
+        </form>
+
+        <div class="text-center mt-3">
+            <small class="text-muted">Уже есть аккаунт?
+                <a href="{% url 'login' %}" class="fw-semibold">Войти</a>
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const passengerRadio = document.getElementById('role-passenger');
+const driverRadio = document.getElementById('role-driver');
+const passengerBox = document.getElementById('passenger-box');
+const driverBox = document.getElementById('driver-box');
+const driverFields = document.getElementById('driverFields');
+
+function updateRole() {
+    if (driverRadio.checked) {
+        driverBox.style.borderColor = '#2563eb';
+        driverBox.style.background = '#eff6ff';
+        passengerBox.style.borderColor = '#e2e8f0';
+        passengerBox.style.background = '#fff';
+        driverFields.classList.remove('d-none');
+    } else {
+        passengerBox.style.borderColor = '#2563eb';
+        passengerBox.style.background = '#eff6ff';
+        driverBox.style.borderColor = '#e2e8f0';
+        driverBox.style.background = '#fff';
+        driverFields.classList.add('d-none');
+    }
+}
+
+passengerBox.style.borderColor = '#2563eb';
+passengerBox.style.background = '#eff6ff';
+
+document.querySelectorAll('input[name="role"]').forEach(r => {
+    r.addEventListener('change', updateRole);
+});
+document.querySelectorAll('.role-card').forEach(card => {
+    card.addEventListener('click', () => setTimeout(updateRole, 10));
+});
+
+async function geocodeHomeAddress() {
+    const address = document.getElementById('homeAddressInput').value;
+    const city = document.getElementById('cityInput').value;
+    const status = document.getElementById('geocodeStatus');
+    if (!address) return;
+
+    const query = city ? `${address}, ${city}` : address;
+    status.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass me-1"></i>Поиск...</span>';
+    try {
+        const resp = await fetch(`/api/geocode/?address=${encodeURIComponent(query)}`);
+        const data = await resp.json();
+        if (data.lat) {
+            document.getElementById('homeLat').value = data.lat;
+            document.getElementById('homeLon').value = data.lon;
+            status.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Найдено: ${data.display_name.substring(0, 60)}...</span>`;
+        } else {
+            status.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Адрес не найден</span>';
+        }
+    } catch(e) {
+        status.innerHTML = '<span class="text-danger">Ошибка запроса</span>';
+    }
+}
+</script>
+{% endblock %}

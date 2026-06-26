@@ -1,0 +1,362 @@
+{% extends 'base.html' %}
+{% block title %}Создать поездку — ОфисРайд{% endblock %}
+{% block nav_rides %}active{% endblock %}
+{% load l10n %}
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header py-3">
+                    <i class="bi bi-plus-circle text-primary me-2"></i>
+                    <strong>Создать новую поездку</strong>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="rideForm">
+                        {% csrf_token %}
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-building text-primary me-2"></i>Офис назначения
+                            </label>
+                            <select name="office" class="form-select" id="officeSelect" required>
+                                <option value="">-- Выберите офис --</option>
+                                {% for office in offices %}
+                                <option value="{{ office.id }}"
+                                        data-lat="{{ office.lat }}" data-lon="{{ office.lon }}"
+                                        data-name="{{ office.name }}" data-city="{{ office.city }}">
+                                    🏢 {{ office.name }} ({{ office.city }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-geo-alt text-danger me-2"></i>Место отправления
+                            </label>
+                            <div class="input-group">
+                                <input type="text" name="departure_address" id="departure_address"
+                                       class="form-control" placeholder="Введите адрес..."
+                                       value="{{ form.departure_address.value|default:'' }}" required>
+                                <button type="button" class="btn btn-outline-primary" onclick="geocodeDeparture()">
+                                    <i class="bi bi-search me-1"></i>Найти
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="useMyLocation()">
+                                    <i class="bi bi-crosshair me-1"></i>Мой адрес
+                                </button>
+                            </div>
+                            <input type="hidden" name="departure_lat" id="dep_lat"
+                                   value="{{ form.departure_lat.value|default:'' }}">
+                            <input type="hidden" name="departure_lon" id="dep_lon"
+                                   value="{{ form.departure_lon.value|default:'' }}">
+                            <input type="hidden" name="departure_city" id="dep_city"
+                                   value="{{ form.departure_city.value|default:'' }}">
+                            <div id="geocodeStatus" class="small mt-1"></div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-calendar-event text-primary me-2"></i>Дата и время отправления
+                            </label>
+                            <input type="datetime-local" name="departure_time" class="form-control"
+                                   id="departure_time" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-people text-primary me-2"></i>Количество мест для пассажиров
+                            </label>
+                            <div class="row align-items-center">
+                                <div class="col-4">
+                                    <input type="number" name="available_seats" class="form-control"
+                                           id="seatsInput" min="1" max="8" value="3" required>
+                                </div>
+                                <div class="col-8">
+                                    <div id="seatsPreview" class="d-flex flex-wrap gap-1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="routeInfo" class="d-none mb-4">
+                            <div class="card border-0" style="background:#f0f9ff">
+                                <div class="card-body py-2">
+                                    <div class="row text-center g-0">
+                                        <div class="col-4">
+                                            <div class="small text-muted">Расстояние</div>
+                                            <div class="fw-bold text-primary" id="routeDistance">—</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="small text-muted">Время в пути</div>
+                                            <div class="fw-bold text-primary" id="routeDuration">—</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="small text-muted">Метод</div>
+                                            <div class="fw-bold text-success" id="routeMethod">—</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-chat-quote text-primary me-2"></i>Комментарий
+                                <small class="text-muted fw-normal">(необязательно)</small>
+                            </label>
+                            <textarea name="comment" class="form-control" rows="2"
+                                      placeholder="Дополнительные условия, остановки...">{{ form.comment.value|default:'' }}</textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-semibold">
+                            <i class="bi bi-plus-circle me-2"></i>Создать поездку
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card sticky-top" style="top: 80px">
+                <div class="card-header py-3">
+                    <i class="bi bi-map text-primary me-2"></i><strong>Маршрут</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div id="routeMap" style="height: 420px; border-radius: 0 0 12px 12px;"></div>
+                </div>
+                <div class="card-footer text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Маршрут рассчитывается после выбора адреса и офиса
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% localize off %}
+const officesData = {{ offices_json|safe }};
+
+const now = new Date();
+now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+document.getElementById('departure_time').min = now.toISOString().slice(0, 16);
+document.getElementById('departure_time').value = now.toISOString().slice(0, 16);
+
+const map = L.map('routeMap').setView([55.75, 37.62], 10);
+{% endlocalize %}
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+}).addTo(map);
+
+setTimeout(() => {
+    map.invalidateSize();
+}, 200);
+
+let depMarker = null, officeMarker = null, routeLayer = null;
+
+const depIcon = L.divIcon({
+    html: '<div style="background:#ef4444;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">📍</div>',
+    iconSize: [28, 28], iconAnchor: [14, 14], className: ''
+});
+
+const officeIconEl = L.divIcon({
+    html: '<div style="background:#2563eb;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">🏢</div>',
+    iconSize: [28, 28], iconAnchor: [14, 14], className: ''
+});
+
+officesData.forEach(o => {
+    L.marker([o.lat, o.lon], {icon: officeIconEl, opacity: 0.5})
+        .bindTooltip(o.name)
+        .addTo(map);
+});
+
+function updateSeatsPreview() {
+    const seats = parseInt(document.getElementById('seatsInput').value) || 0;
+    const preview = document.getElementById('seatsPreview');
+    let html = '';
+    for (let i = 0; i < seats; i++) {
+        html += '<span class="seat-indicator free" style="font-size:1.2rem">💺</span>';
+    }
+    preview.innerHTML = html || '<span class="text-muted small">Нет мест</span>';
+}
+updateSeatsPreview();
+document.getElementById('seatsInput').addEventListener('input', updateSeatsPreview);
+
+document.getElementById('officeSelect').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (!opt.value) return;
+    const lat = parseFloat(opt.dataset.lat);
+    const lon = parseFloat(opt.dataset.lon);
+    if (officeMarker) officeMarker.remove();
+    officeMarker = L.marker([lat, lon], {icon: officeIconEl})
+        .bindPopup(`<b>${opt.dataset.name}</b><br>${opt.dataset.city}`)
+        .addTo(map)
+        .openPopup();
+    tryBuildRoute();
+});
+
+async function geocodeDeparture() {
+    const address = document.getElementById('departure_address').value;
+    if (!address) return;
+    const status = document.getElementById('geocodeStatus');
+    status.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass me-1"></i>Поиск адреса...</span>';
+    try {
+        const resp = await fetch(`/api/geocode/?address=${encodeURIComponent(address)}`);
+        const data = await resp.json();
+        if (data.lat) {
+            document.getElementById('dep_lat').value = data.lat;
+            document.getElementById('dep_lon').value = data.lon;
+            status.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Найдено</span>`;
+            updateDepMarker(data.lat, data.lon);
+            detectCity(data.lat, data.lon);
+            tryBuildRoute();
+        } else {
+            status.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Адрес не найден</span>';
+        }
+    } catch(e) {
+        status.innerHTML = '<span class="text-danger">Ошибка</span>';
+    }
+}
+
+async function useMyLocation() {
+    {% if user.profile.home_lat %}
+    let lat = "{{ user.profile.home_lat|unlocalize }}";
+    let lon = "{{ user.profile.home_lon|unlocalize }}";
+    lat = lat.replace(',', '.');
+    lon = lon.replace(',', '.');
+    document.getElementById('dep_lat').value = lat;
+    document.getElementById('dep_lon').value = lon;
+    document.getElementById('departure_address').value = '{{ user.profile.home_address }}';
+    document.getElementById('dep_city').value = '{{ user.profile.city }}';
+    document.getElementById('geocodeStatus').innerHTML = '<span class="text-success"><i class="bi bi-house me-1"></i>Использован домашний адрес</span>';
+    updateDepMarker(parseFloat(lat), parseFloat(lon));
+    tryBuildRoute();
+    {% else %}
+    alert('Домашний адрес не указан в профиле. Заполните профиль или введите адрес вручную.');
+    {% endif %}
+}
+
+map.on('click', function(e) {
+    const lat = e.latlng.lat, lon = e.latlng.lng;
+    document.getElementById('dep_lat').value = lat;
+    document.getElementById('dep_lon').value = lon;
+    document.getElementById('geocodeStatus').innerHTML = '<span class="text-info"><i class="bi bi-pin-map me-1"></i>Точка выбрана на карте</span>';
+    updateDepMarker(lat, lon);
+    detectCity(lat, lon);
+    tryBuildRoute();
+});
+
+function updateDepMarker(lat, lon) {
+    lat = typeof lat === 'string' ? parseFloat(lat.replace(',', '.')) : lat;
+    lon = typeof lon === 'string' ? parseFloat(lon.replace(',', '.')) : lon;
+    if (isNaN(lat) || isNaN(lon)) return;
+    
+    if (depMarker) depMarker.remove();
+    depMarker = L.marker([lat, lon], {icon: depIcon})
+        .bindPopup('Место отправления')
+        .addTo(map);
+    map.flyTo([lat, lon], 13, {duration: 0.8});
+}
+
+async function detectCity(lat, lon) {
+    try {
+        const resp = await fetch(`/api/detect-city/?lat=${lat}&lon=${lon}`);
+        const data = await resp.json();
+        if (data.city) {
+            document.getElementById('dep_city').value = data.city;
+        }
+    } catch(e) {}
+}
+
+async function tryBuildRoute() {
+    let depLat = document.getElementById('dep_lat').value;
+    let depLon = document.getElementById('dep_lon').value;
+    const officeSelect = document.getElementById('officeSelect');
+    const opt = officeSelect.options[officeSelect.selectedIndex];
+
+    if (!depLat || !opt || !opt.value) return;
+
+    depLat = depLat.replace(',', '.');
+    depLon = depLon.replace(',', '.');
+
+    let officeLat = opt.dataset.lat;
+    let officeLon = opt.dataset.lon;
+    if (officeLat && typeof officeLat === 'string') officeLat = officeLat.replace(',', '.');
+    if (officeLon && typeof officeLon === 'string') officeLon = officeLon.replace(',', '.');
+
+    try {
+        const resp = await fetch(`/api/route/?from_lat=${depLat}&from_lon=${depLon}&to_lat=${officeLat}&to_lon=${officeLon}`);
+        const data = await resp.json();
+
+        document.getElementById('routeDistance').textContent = data.distance_km + ' км';
+        document.getElementById('routeDuration').textContent = Math.round(data.duration_min) + ' мин';
+        document.getElementById('routeMethod').textContent = data.method === 'osrm' ? 'OSRM 🛣️' : 'Прямая 📏';
+        document.getElementById('routeInfo').classList.remove('d-none');
+
+        if (routeLayer) routeLayer.remove();
+        const latlngs = data.coords.map(c => [c[1], c[0]]);
+        routeLayer = L.polyline(latlngs, {
+            color: '#2563eb', weight: 4, opacity: 0.8,
+            smoothFactor: 1
+        }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), {padding: [30, 30]});
+    } catch(e) {
+        console.error('Route error:', e);
+    }
+}
+
+window.addEventListener('load', () => {
+    const depLat = document.getElementById('dep_lat').value;
+    const depLon = document.getElementById('dep_lon').value;
+    if (depLat && depLon) {
+        updateDepMarker(parseFloat(depLat), parseFloat(depLon));
+    }
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 300);
+});
+
+document.getElementById('rideForm').addEventListener('submit', function(e) {
+    const depLat = document.getElementById('dep_lat').value;
+    const depLon = document.getElementById('dep_lon').value;
+    const depCity = document.getElementById('dep_city').value;
+    const office = document.getElementById('officeSelect').value;
+    const departureTime = document.getElementById('departure_time').value;
+    const seats = document.getElementById('seatsInput').value;
+    
+    console.log('=== Отправка формы ===');
+    console.log('departure_lat:', depLat);
+    console.log('departure_lon:', depLon);
+    console.log('departure_city:', depCity);
+    console.log('office:', office);
+    console.log('departure_time:', departureTime);
+    console.log('available_seats:', seats);
+    
+    let errors = [];
+    if (!office) errors.push('Не выбран офис');
+    if (!depLat || !depLon) errors.push('Не указаны координаты отправления');
+    if (!departureTime) errors.push('Не указано время отправления');
+    if (!seats || seats < 1) errors.push('Не указано количество мест');
+    
+    if (errors.length > 0) {
+        e.preventDefault();
+        alert('Ошибка заполнения формы:\n' + errors.join('\n'));
+        return false;
+    }
+    
+    if (depLat) {
+        document.getElementById('dep_lat').value = depLat.replace(',', '.');
+    }
+    if (depLon) {
+        document.getElementById('dep_lon').value = depLon.replace(',', '.');
+    }
+    
+    console.log('=== После преобразования ===');
+    console.log('departure_lat:', document.getElementById('dep_lat').value);
+    console.log('departure_lon:', document.getElementById('dep_lon').value);
+});
+</script>
+{% endblock %}

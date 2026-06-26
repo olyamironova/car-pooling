@@ -1,0 +1,512 @@
+{% extends 'base.html' %}
+{% block title %}Поездка #{{ ride.id }} — ОфисРайд{% endblock %}
+{% block nav_rides %}active{% endblock %}
+{% load l10n %}
+{% block content %}
+<div class="container mt-4 mb-5">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'ride_list' %}">Поездки</a></li>
+            <li class="breadcrumb-item active">Поездка #{{ ride.id }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="passenger-avatar" style="width:50px;height:50px;font-size:1.3rem;background:#2563eb">
+                                {{ ride.driver.first_name|first|default:ride.driver.username|first|upper }}
+                            </div>
+                            <div>
+                                <h5 class="mb-0 fw-bold">{{ ride.driver.get_full_name|default:ride.driver.username }}</h5>
+                                <small class="text-muted">
+                                    {% if ride.driver.profile.car_model %}
+                                        🚗 {{ ride.driver.profile.car_model }}
+                                        {% if ride.driver.profile.car_plate %}
+                                            • {{ ride.driver.profile.car_plate }}
+                                        {% endif %}
+                                    {% endif %}
+                                    ⭐ {{ ride.driver.profile.rating }}
+                                </small>
+                            </div>
+                        </div>
+                        <span class="badge fs-6 status-{{ ride.status }} py-2 px-3">
+                            {{ ride.get_status_display }}
+                        </span>
+                    </div>
+
+                    <div class="route-viz p-3 bg-light rounded mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="route-dot" style="width:14px;height:14px;background:#ef4444;border-radius:50%;border:2px solid white;box-shadow:0 0 0 2px #ef4444;flex-shrink:0"></div>
+                            <div class="ms-3">
+                                <div class="fw-semibold">{{ ride.departure_address }}</div>
+                                {% if ride.departure_city %}
+                                <small class="text-muted">📍 {{ ride.departure_city }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center my-1 ms-2">
+                            <div style="width:2px;background:#d1d5db;height:30px;margin-left:4px"></div>
+                            {% if ride.route_distance_km %}
+                            <small class="text-muted ms-3">{{ ride.route_distance_km }} км • ~{{ ride.route_duration_min|floatformat:0 }} мин</small>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div class="route-dot" style="width:14px;height:14px;background:#2563eb;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:white;box-shadow:0 0 0 2px #2563eb">🏢</div>
+                            <div class="ms-3">
+                                <div class="fw-semibold">{{ ride.office.name }}</div>
+                                <small class="text-muted">📍 {{ ride.office.address }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="text-muted small">Дата</div>
+                                <div class="fw-semibold small">{{ ride.departure_time|date:"d.m.Y" }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="text-muted small">Время</div>
+                                <div class="fw-semibold small">{{ ride.departure_time|date:"H:i" }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="text-muted small">Мест свободно</div>
+                                <div class="fw-bold small {% if ride.get_free_seats == 0 %}text-danger{% else %}text-success{% endif %}">
+                                    {{ ride.get_free_seats }}/{{ ride.available_seats }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="text-center p-2 bg-light rounded">
+                                <div class="text-muted small">Создана</div>
+                                <div class="fw-semibold small">{{ ride.created_at|date:"d.m H:i" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if ride.comment %}
+                    <div class="alert alert-info py-2">
+                        <i class="bi bi-chat-quote me-2"></i>{{ ride.comment }}
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if is_driver %}
+                            {% if ride.status == 'scheduled' %}
+                            <form method="post" action="{% url 'start_ride' ride.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success fw-semibold">
+                                    <i class="bi bi-play-fill me-2"></i>Начать поездку
+                                </button>
+                            </form>
+                            <a href="{% url 'ride_simulation' ride.pk %}" class="btn btn-outline-primary fw-semibold">
+                                <i class="bi bi-display me-2"></i>Симуляция
+                            </a>
+                            <form method="post" action="{% url 'cancel_ride' ride.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger fw-semibold"
+                                        onclick="return confirm('Отменить поездку?')">
+                                    <i class="bi bi-x-circle me-2"></i>Отменить
+                                </button>
+                            </form>
+                            {% elif ride.status == 'active' %}
+                            <a href="{% url 'ride_simulation' ride.pk %}" class="btn btn-success fw-semibold">
+                                <i class="bi bi-radar me-2"></i>Смотреть симуляцию
+                            </a>
+                            {% endif %}
+                        {% elif is_passenger %}
+                            <div class="alert alert-success py-2 mb-0 flex-grow-1">
+                                <i class="bi bi-check-circle me-2"></i>Вы участвуете в этой поездке
+                            </div>
+                            {% if ride.status == 'active' %}
+                            <a href="{% url 'ride_simulation' ride.pk %}" class="btn btn-outline-success fw-semibold">
+                                <i class="bi bi-radar me-2"></i>Смотреть
+                            </a>
+                            {% endif %}
+                            {% if ride.status == 'scheduled' %}
+                            <form method="post" action="{% url 'leave_ride' ride.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger fw-semibold">
+                                    <i class="bi bi-door-open me-2"></i>Покинуть поездку
+                                </button>
+                            </form>
+                            {% endif %}
+                        {% elif user.is_authenticated %}
+                            {% if can_join %}
+                            <button class="btn btn-success fw-semibold btn-lg" data-bs-toggle="modal" data-bs-target="#joinModal">
+                                <i class="bi bi-plus-circle me-2"></i>Присоединиться
+                            </button>
+                            {% else %}
+                            <div class="alert alert-warning py-2 mb-0 flex-grow-1">
+                                <i class="bi bi-exclamation-triangle me-2"></i>{{ join_reason }}
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary fw-semibold btn-lg">
+                                <i class="bi bi-box-arrow-in-right me-2"></i>Войдите, чтобы присоединиться
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-map text-primary me-2"></i><strong>Маршрут на карте</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div id="rideMap" style="height: 380px; border-radius: 0 0 12px 12px;"></div>
+                </div>
+            </div>
+
+            {% if distance_comparison %}
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-rulers text-primary me-2"></i>
+                    <strong>Сравнение методов расчёта расстояния</strong>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:#eff6ff">
+                                <div style="font-size:2rem">🌐</div>
+                                <div class="fw-bold">{{ distance_comparison.haversine_km }} км</div>
+                                <div class="text-muted small">Формула Гаверсина</div>
+                                <div class="text-muted" style="font-size:0.7rem">Кратчайшее расстояние по дуге Земли</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:#f0fdf4">
+                                <div style="font-size:2rem">🗺️</div>
+                                <div class="fw-bold">{{ distance_comparison.manhattan_km }} км</div>
+                                <div class="text-muted small">Манхэттенское расстояние</div>
+                                <div class="text-muted" style="font-size:0.7rem">По горизонтали + вертикали (сетка улиц)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="p-3 rounded" style="background:#fff7ed">
+                                <div style="font-size:2rem">🛣️</div>
+                                <div class="fw-bold">
+                                    {% if distance_comparison.osrm_km %}
+                                        {{ distance_comparison.osrm_km }} км
+                                    {% else %}
+                                        Недоступно
+                                    {% endif %}
+                                </div>
+                                <div class="text-muted small">OSRM (реальные дороги)</div>
+                                <div class="text-muted" style="font-size:0.7rem">
+                                    {% if distance_comparison.road_factor %}
+                                        Коэффициент дорог: ×{{ distance_comparison.road_factor }}
+                                    {% else %}
+                                        Расчёт по реальным дорогам
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-people text-primary me-2"></i>
+                    <strong>Пассажиры</strong>
+                    <span class="badge bg-primary ms-2">{{ passengers|length }}/{{ ride.available_seats }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 d-flex flex-wrap gap-1">
+                        {% for i in "12345678"|make_list %}
+                            {% if forloop.counter <= passengers|length %}
+                                <span class="seat-indicator occupied" style="font-size:1.2rem" title="Занято">👤</span>
+                            {% elif forloop.counter <= ride.available_seats %}
+                                <span class="seat-indicator free" style="font-size:1.2rem" title="Свободно">💺</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if passengers %}
+                    <div class="list-group list-group-flush">
+                        {% for p in passengers %}
+                        <div class="list-group-item px-0 py-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="passenger-avatar" style="width:36px;height:36px;font-size:0.9rem;background:hsl({{ forloop.counter|add:200 }}deg, 60%, 45%)">
+                                    {{ p.passenger.first_name|first|default:p.passenger.username|first|upper }}
+                                </div>
+                                <div>
+                                    <div class="fw-semibold small">{{ p.passenger.get_full_name|default:p.passenger.username }}</div>
+                                    {% if p.pickup_address and p.pickup_address != ride.departure_address %}
+                                    <div class="text-muted" style="font-size:0.72rem">
+                                        <i class="bi bi-pin-map me-1"></i>{{ p.pickup_address|truncatechars:35 }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-2 text-muted">
+                        <i class="bi bi-person-x fs-4 d-block mb-1"></i>
+                        Пока нет пассажиров
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-building text-primary me-2"></i>
+                    <strong>Офис назначения</strong>
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold">{{ ride.office.name }}</h6>
+                    <p class="text-muted small mb-1">
+                        <i class="bi bi-geo-alt me-2"></i>{{ ride.office.address }}
+                    </p>
+                    <p class="text-muted small mb-2">
+                        <i class="bi bi-buildings me-2"></i>{{ ride.office.city }}
+                    </p>
+                    {% if ride.office.description %}
+                    <p class="small mb-0">{{ ride.office.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card border-0" style="background:#fef9ec">
+                <div class="card-body">
+                    <h6 class="fw-bold"><i class="bi bi-shield-check text-warning me-2"></i>Ограничения</h6>
+                    <ul class="small text-muted mb-0 ps-3">
+                        <li>Только пассажиры из <strong>{{ ride.departure_city|default:"того же города" }}</strong></li>
+                        <li>Должны быть свободные места</li>
+                        <li>Поездка должна быть активна</li>
+                        <li>Нельзя присоединиться как водитель</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if can_join and user.is_authenticated %}
+<div class="modal fade" id="joinModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle text-success me-2"></i>Присоединиться к поездке</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'join_ride' ride.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 mb-3">
+                        <small>
+                            <i class="bi bi-info-circle me-1"></i>
+                            Основное место отправления: <strong>{{ ride.departure_address }}</strong>
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Укажите свой адрес подбора</label>
+                        <div class="input-group">
+                            <input type="text" name="pickup_address" id="pickup_address_input"
+                                   class="form-control" placeholder="Оставьте пустым, чтобы использовать адрес отправления">
+                            <button type="button" class="btn btn-outline-primary" onclick="geocodePickup()">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" name="pickup_lat" id="pickup_lat">
+                        <input type="hidden" name="pickup_lon" id="pickup_lon">
+                        <div id="pickupStatus" class="small mt-1"></div>
+                    </div>
+                    {% if user.profile.home_address %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="useHomePickup()">
+                        <i class="bi bi-house me-1"></i>Использовать домашний адрес
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success fw-semibold">
+                        <i class="bi bi-check-circle me-2"></i>Подтвердить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% load l10n %}
+{% localize off %}
+
+const depLat  = parseFloat("{{ ride.departure_lat|unlocalize }}");
+const depLon  = parseFloat("{{ ride.departure_lon|unlocalize }}");
+const offLat  = parseFloat("{{ ride.office.lat|unlocalize }}");
+const offLon  = parseFloat("{{ ride.office.lon|unlocalize }}");
+
+const routeCoords = {{ coords_json|safe }};
+
+{% endlocalize %}
+
+const map = L.map('rideMap').setView([depLat, depLon], 10);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+}).addTo(map);
+
+const depIcon = L.divIcon({
+    html: `<div style="
+        background:#ef4444;border-radius:50%;
+        width:32px;height:32px;
+        display:flex;align-items:center;justify-content:center;
+        font-size:16px;border:2px solid white;
+        box-shadow:0 2px 8px rgba(0,0,0,.3)">📍</div>`,
+    iconSize: [32,32], iconAnchor: [16,16], className: ''
+});
+
+const officeIcon = L.divIcon({
+    html: `<div style="
+        background:#2563eb;border-radius:8px;
+        width:32px;height:32px;
+        display:flex;align-items:center;justify-content:center;
+        font-size:16px;border:2px solid white;
+        box-shadow:0 2px 8px rgba(0,0,0,.3)">🏢</div>`,
+    iconSize: [32,32], iconAnchor: [16,16], className: ''
+});
+
+const passIcon = L.divIcon({
+    html: `<div style="
+        background:#10b981;border-radius:50%;
+        width:26px;height:26px;
+        display:flex;align-items:center;justify-content:center;
+        font-size:13px;border:2px solid white;
+        box-shadow:0 2px 6px rgba(0,0,0,.3)">👤</div>`,
+    iconSize: [26,26], iconAnchor: [13,13], className: ''
+});
+
+L.marker([depLat, depLon], {icon: depIcon})
+    .bindPopup(`<b>📍 Место отправления</b><br>{{ ride.departure_address|escapejs }}`)
+    .addTo(map);
+
+L.marker([offLat, offLon], {icon: officeIcon})
+    .bindPopup(`<b>🏢 {{ ride.office.name|escapejs }}</b><br>{{ ride.office.address|escapejs }}`)
+    .addTo(map);
+
+{% for p in passengers %}
+{% if p.pickup_lat %}
+{% localize off %}
+(function() {
+    const pLat = parseFloat("{{ p.pickup_lat|unlocalize }}");
+    const pLon = parseFloat("{{ p.pickup_lon|unlocalize }}");
+    if (!isNaN(pLat) && !isNaN(pLon)) {
+        L.marker([pLat, pLon], {icon: passIcon})
+            .bindPopup('👤 {{ p.passenger.get_full_name|default:p.passenger.username|escapejs }}')
+            .addTo(map);
+    }
+})();
+{% endlocalize %}
+{% endif %}
+{% endfor %}
+
+function drawRoute() {
+    let bounds;
+
+    if (routeCoords && routeCoords.length > 1) {
+        // OSRM маршрут: координаты в формате [lon, lat]
+        // Leaflet ожидает [lat, lon]
+        const latlngs = routeCoords.map(c => [c[1], c[0]]);
+
+        const routeLine = L.polyline(latlngs, {
+            color: '#2563eb',
+            weight: 5,
+            opacity: 0.85,
+            smoothFactor: 1,
+            lineJoin:  'round',
+            lineCap:   'round'
+        }).addTo(map);
+
+        bounds = routeLine.getBounds();
+
+    } else {
+        L.polyline([[depLat, depLon], [offLat, offLon]], {
+            color: '#9ca3af',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '8, 6'
+        }).addTo(map);
+
+        bounds = L.latLngBounds(
+            [depLat, depLon],
+            [offLat, offLon]
+        );
+    }
+
+    map.fitBounds(bounds, {padding: [40, 40]});
+}
+
+drawRoute();
+
+setTimeout(() => map.invalidateSize(), 200);
+setTimeout(() => map.invalidateSize(), 600);
+
+async function geocodePickup() {
+    const input  = document.getElementById('pickup_address_input');
+    const status = document.getElementById('pickupStatus');
+    if (!input || !input.value.trim()) return;
+
+    status.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass me-1"></i>Поиск...</span>';
+
+    try {
+        const resp = await fetch(`/api/geocode/?address=${encodeURIComponent(input.value)}`);
+        const data = await resp.json();
+
+        if (data.lat) {
+            document.getElementById('pickup_lat').value = data.lat;
+            document.getElementById('pickup_lon').value = data.lon;
+            status.innerHTML = `
+                <span class="text-success">
+                    <i class="bi bi-check-circle me-1"></i>Найдено
+                </span>`;
+        } else {
+            status.innerHTML = `
+                <span class="text-danger">
+                    <i class="bi bi-x-circle me-1"></i>Адрес не найден
+                </span>`;
+        }
+    } catch (e) {
+        status.innerHTML = '<span class="text-danger">Ошибка запроса</span>';
+    }
+}
+
+function useHomePickup() {
+    {% if user.profile.home_address %}
+    {% localize off %}
+    document.getElementById('pickup_address_input').value =
+        '{{ user.profile.home_address|escapejs }}';
+    document.getElementById('pickup_lat').value =
+        '{{ user.profile.home_lat|default:""|unlocalize }}';
+    document.getElementById('pickup_lon').value =
+        '{{ user.profile.home_lon|default:""|unlocalize }}';
+    document.getElementById('pickupStatus').innerHTML = `
+        <span class="text-success">
+            <i class="bi bi-house me-1"></i>Домашний адрес
+        </span>`;
+    {% endlocalize %}
+    {% endif %}
+}
+</script>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Удалить офис{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width:500px">
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <div style="font-size:4rem">⚠️</div>
+            <h4 class="fw-bold mt-3">Удалить офис?</h4>
+            <p class="text-muted">
+                <strong>{{ office.name }}</strong><br>
+                {{ office.city }}, {{ office.address }}
+            </p>
+            <p class="text-danger small">Это действие нельзя отменить. Все связанные поездки также будут удалены.</p>
+            <div class="d-flex gap-3 justify-content-center mt-4">
+                <a href="{% url 'office_list' %}" class="btn btn-secondary fw-semibold px-4">Отмена</a>
+                <form method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger fw-semibold px-4">
+                        <i class="bi bi-trash me-2"></i>Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

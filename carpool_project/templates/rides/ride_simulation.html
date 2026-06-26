@@ -1,0 +1,450 @@
+{% extends 'base.html' %}
+{% block title %}Симуляция поездки #{{ ride.id }} — ОфисРайд{% endblock %}
+{% load l10n %}
+{% block extra_head %}
+<style>
+    body { background: #0f172a; }
+    .sim-body { min-height: calc(100vh - 120px); }
+    #simMap { height: calc(100vh - 280px); min-height: 400px; border-radius: 12px; }
+
+    .sim-panel {
+        background: linear-gradient(135deg, #1e293b, #0f172a);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        color: white;
+    }
+
+    .progress-track {
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+        height: 10px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #34d399);
+        border-radius: 10px;
+        transition: width 0.5s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-fill::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%;
+        width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        animation: shimmer 1.5s infinite;
+    }
+
+    @keyframes shimmer {
+        from { left: -100%; }
+        to { left: 100%; }
+    }
+
+    .stat-box {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        text-align: center;
+    }
+
+    .stat-box .value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #60a5fa;
+    }
+
+    .stat-box .label {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.5);
+    }
+
+    .car-marker-anim {
+        animation: bounce 0.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes bounce {
+        from { transform: translateY(0) rotate(0deg); }
+        to { transform: translateY(-3px) rotate(2deg); }
+    }
+
+    .status-dot {
+        width: 10px; height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+    }
+
+    .status-dot.active { background: #10b981; animation: pulse-dot 1.5s infinite; }
+    .status-dot.waiting { background: #f59e0b; }
+    .status-dot.done { background: #6b7280; }
+
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(0.8); }
+    }
+
+    .log-item {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        border-left: 3px solid;
+        margin-bottom: 4px;
+    }
+    .log-item.info { border-color: #60a5fa; background: rgba(96,165,250,0.1); }
+    .log-item.success { border-color: #10b981; background: rgba(16,185,129,0.1); }
+    .log-item.warning { border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-3 sim-body">
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div id="simMap"></div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="sim-panel p-3 mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h5 class="mb-0 fw-bold" style="color:#60a5fa">
+                            <span id="statusDot" class="status-dot waiting"></span>
+                            Симуляция поездки
+                        </h5>
+                        <small style="color:rgba(255,255,255,0.5)">Поездка #{{ ride.id }}</small>
+                    </div>
+                    <div id="carEmoji" class="car-icon" style="font-size:2rem">🚗</div>
+                </div>
+
+                <div class="mb-3 p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
+                    <div class="d-flex align-items-center mb-1">
+                        <span style="color:#ef4444;font-size:0.8rem">📍</span>
+                        <span class="ms-2 small" style="color:rgba(255,255,255,0.7)">{{ ride.departure_address|truncatechars:45 }}</span>
+                    </div>
+                    <div class="text-center" style="color:rgba(255,255,255,0.3);font-size:0.8rem">│ ↓</div>
+                    <div class="d-flex align-items-center">
+                        <span style="color:#60a5fa;font-size:0.8rem">🏢</span>
+                        <span class="ms-2 small" style="color:rgba(255,255,255,0.7)">{{ ride.office.name }}</span>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small style="color:rgba(255,255,255,0.6)">Прогресс маршрута</small>
+                        <small id="progressText" style="color:#10b981;font-weight:600">0%</small>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progressBar" style="width:0%"></div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="stat-box">
+                            <div class="value" id="distanceStat">0 км</div>
+                            <div class="label">Пройдено</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-box">
+                            <div class="value" id="timeStat">0:00</div>
+                            <div class="label">Время в пути</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-box">
+                            <div class="value" id="speedStat">0</div>
+                            <div class="label">км/ч скорость</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stat-box">
+                            <div class="value" id="etaStat">—</div>
+                            <div class="label">Прибытие (ориент.)</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if is_driver %}
+                <div class="mb-3">
+                    <button id="startBtn" class="btn btn-success w-100 fw-semibold btn-lg" onclick="startSimulation()">
+                        <i class="bi bi-play-fill me-2"></i>Запустить симуляцию
+                    </button>
+                    <button id="stopBtn" class="btn btn-danger w-100 fw-semibold btn-lg d-none" onclick="stopSimulation()">
+                        <i class="bi bi-stop-fill me-2"></i>Остановить
+                    </button>
+                </div>
+                {% else %}
+                <div class="alert py-2 mb-3" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#93c5fd">
+                    <small><i class="bi bi-eye me-1"></i>Вы наблюдаете за поездкой в реальном времени</small>
+                </div>
+                {% endif %}
+
+                <div>
+                    <small style="color:rgba(255,255,255,0.4);margin-bottom:6px;display:block">Журнал событий</small>
+                    <div id="eventLog" style="max-height:150px;overflow-y:auto">
+                        <div class="log-item info" style="color:rgba(255,255,255,0.7)">
+                            Ожидание запуска симуляции...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <a href="{% url 'ride_detail' ride.pk %}" class="btn btn-outline-light w-100 fw-semibold">
+                <i class="bi bi-arrow-left me-2"></i>Вернуться к поездке
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% localize off %}
+const coords = {{ coords_json|safe|default:"[]" }};
+const rideId = {{ ride.id }};
+const depLat = parseFloat("{{ ride.departure_lat|unlocalize }}");
+const depLon = parseFloat("{{ ride.departure_lon|unlocalize }}");
+const officeLat = parseFloat("{{ ride.office.lat|unlocalize }}");
+const officeLon = parseFloat("{{ ride.office.lon|unlocalize }}");
+const routeDistanceKm = parseFloat("{{ ride.route_distance_km|unlocalize|default:'0' }}");
+
+const isDriver = {{ is_driver|yesno:"true,false" }};
+const routeDurationMin = {{ ride.route_duration_min|default:30 }};
+{% endlocalize %}
+const map = L.map('simMap', {zoomControl: true}).setView([depLat, depLon], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+}).addTo(map);
+
+setTimeout(() => {
+    map.invalidateSize();
+}, 200);
+
+const officeIcon = L.divIcon({
+    html: '<div style="background:#2563eb;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.4)">🏢</div>',
+    iconSize: [36, 36], iconAnchor: [18, 18], className: ''
+});
+const depIcon = L.divIcon({
+    html: '<div style="background:#ef4444;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.4)">🏠</div>',
+    iconSize: [32, 32], iconAnchor: [16, 16], className: ''
+});
+
+L.marker([depLat, depLon], {icon: depIcon})
+    .bindPopup('📍 Место отправления').addTo(map);
+L.marker([officeLat, officeLon], {icon: officeIcon})
+    .bindPopup('🏢 {{ ride.office.name|escapejs }}').addTo(map);
+
+let routeLine = null;
+let drivenLine = null;
+if (coords && coords.length > 1) {
+    const latlngs = coords.map(c => [c[1], c[0]]);
+    routeLine = L.polyline(latlngs, {
+        color: 'rgba(255,255,255,0.2)', weight: 4, opacity: 0.6
+    }).addTo(map);
+    map.fitBounds(routeLine.getBounds(), {padding: [40, 40]});
+
+    drivenLine = L.polyline([], {
+        color: '#10b981', weight: 5, opacity: 0.9
+    }).addTo(map);
+} else {
+    const bounds = L.latLngBounds([[depLat, depLon], [officeLat, officeLon]]);
+    map.fitBounds(bounds, {padding: [40, 40]});
+}
+
+const carIcon = L.divIcon({
+    html: '<div class="car-marker-anim" style="font-size:2rem;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))">🚗</div>',
+    iconSize: [40, 40], iconAnchor: [20, 20], className: ''
+});
+
+let carMarker = L.marker([depLat, depLon], {icon: carIcon, zIndexOffset: 1000})
+    .addTo(map);
+
+{% for p in ride.passengers.all %}
+{% if p.pickup_lat and p.status == 'confirmed' %}
+const passIcon_{{ forloop.counter }} = L.divIcon({
+    html: '<div style="background:#f59e0b;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)">👤</div>',
+    iconSize: [28, 28], iconAnchor: [14, 14], className: ''
+});
+L.marker([{{ p.pickup_lat }}, {{ p.pickup_lon }}], {icon: passIcon_{{ forloop.counter }}})
+    .bindPopup('👤 {{ p.passenger.get_full_name|default:p.passenger.username|escapejs }}')
+    .addTo(map);
+{% endif %}
+{% endfor %}
+
+let ws = null;
+let isRunning = false;
+let startTime = null;
+
+function connectWS() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/ride/${rideId}/`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        addLog('WebSocket подключён', 'info');
+        ws.send(JSON.stringify({action: 'get_position'}));
+    };
+
+    ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        handleWsMessage(data);
+    };
+
+    ws.onclose = () => {
+        addLog('WebSocket отключён', 'warning');
+        setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = (e) => {
+        addLog('Ошибка подключения', 'warning');
+    };
+}
+
+function handleWsMessage(data) {
+    if (data.type === 'ride_state' || data.type === 'position_update') {
+        updateProgress(data.progress || 0);
+        if (data.current_lat && data.current_lon) {
+            updateCarPosition(data.current_lat, data.current_lon, data.progress || 0);
+        }
+        if (data.status === 'completed') {
+            onRideCompleted();
+        }
+    }
+}
+
+function updateCarPosition(lat, lon, progress) {
+    carMarker.setLatLng([lat, lon]);
+
+    if (drivenLine && coords.length > 0) {
+        const totalPoints = coords.length;
+        const drivenCount = Math.floor((progress / 100) * totalPoints);
+        const drivenCoords = coords.slice(0, drivenCount + 1).map(c => [c[1], c[0]]);
+        drivenLine.setLatLngs(drivenCoords);
+    }
+
+    const driven = (progress / 100) * routeDistanceKm;
+    document.getElementById('distanceStat').textContent = driven.toFixed(1) + ' км';
+
+    if (startTime) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = Math.floor(elapsed % 60);
+        document.getElementById('timeStat').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        const speed = elapsed > 0 ? (driven / elapsed * 3600) : 0;
+        document.getElementById('speedStat').textContent = Math.min(80, Math.round(speed));
+
+        if (progress > 0 && progress < 100) {
+            const remainingProgress = 100 - progress;
+            const timePerProgress = elapsed / progress;
+            const etaSeconds = remainingProgress * timePerProgress;
+            const etaMin = Math.round(etaSeconds / 60);
+            document.getElementById('etaStat').textContent = etaMin + ' мин';
+        }
+    }
+}
+
+function updateProgress(progress) {
+    document.getElementById('progressBar').style.width = progress + '%';
+    document.getElementById('progressText').textContent = Math.round(progress) + '%';
+}
+
+function startSimulation() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addLog('Подключение к серверу...', 'warning');
+        return;
+    }
+
+    isRunning = true;
+    startTime = Date.now();
+
+    document.getElementById('startBtn').classList.add('d-none');
+    document.getElementById('stopBtn').classList.remove('d-none');
+
+    const statusDot = document.getElementById('statusDot');
+    statusDot.className = 'status-dot active';
+
+    addLog('🚀 Поездка начата!', 'success');
+    addLog('Автомобиль движется по маршруту...', 'info');
+
+    ws.send(JSON.stringify({action: 'start_simulation'}));
+}
+
+function stopSimulation() {
+    isRunning = false;
+    document.getElementById('startBtn').classList.remove('d-none');
+    document.getElementById('stopBtn').classList.add('d-none');
+
+    const statusDot = document.getElementById('statusDot');
+    statusDot.className = 'status-dot waiting';
+
+    addLog('⏸ Симуляция остановлена', 'warning');
+}
+
+function onRideCompleted() {
+    isRunning = false;
+    document.getElementById('carEmoji').textContent = '🏁';
+    document.getElementById('statusDot').className = 'status-dot done';
+
+    if (document.getElementById('stopBtn')) {
+        document.getElementById('stopBtn').classList.add('d-none');
+    }
+
+    addLog('🏁 Поездка завершена! Прибыли в офис!', 'success');
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #0f172a, #1e3a5f);
+        border: 2px solid #10b981; border-radius: 20px;
+        padding: 2rem 3rem; text-align: center; z-index: 9999;
+        color: white; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    `;
+    overlay.innerHTML = `
+        <div style="font-size:4rem">🏁</div>
+        <h3 style="color:#10b981;margin:1rem 0 0.5rem">Поездка завершена!</h3>
+        <p style="color:rgba(255,255,255,0.7)">Все прибыли в {{ ride.office.name|escapejs }}!</p>
+        <a href="/rides/${rideId}/" class="btn btn-success mt-2">Вернуться</a>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 8000);
+}
+
+function addLog(message, type = 'info') {
+    const log = document.getElementById('eventLog');
+    const time = new Date().toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    const item = document.createElement('div');
+    item.className = `log-item ${type}`;
+    item.style.color = 'rgba(255,255,255,0.8)';
+    item.textContent = `[${time}] ${message}`;
+    log.insertBefore(item, log.firstChild);
+    if (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+window.addEventListener('load', () => {
+    addLog('Инициализация карты...', 'info');
+    setTimeout(connectWS, 500);
+
+    if (!isDriver) {
+        addLog('Ожидание старта от водителя...', 'info');
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({action: 'get_position'}));
+            }
+        }, 2000);
+    }
+    
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 500);
+});
+</script>
+{% endblock %}

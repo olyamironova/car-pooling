@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}🚗 ОфисРайд{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #0f172a;
+            --light-bg: #f8fafc;
+            --card-shadow: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -1px rgba(0,0,0,.04);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--light-bg);
+            color: #1e293b;
+            min-height: 100vh;
+        }
+
+        .navbar-custom {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+            padding: 0.75rem 0;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.4rem;
+            color: #fff !important;
+            letter-spacing: -0.5px;
+        }
+
+        .navbar-brand span {
+            color: #60a5fa;
+        }
+
+        .nav-link {
+            color: rgba(255,255,255,0.8) !important;
+            font-weight: 500;
+            transition: color 0.2s;
+            padding: 0.4rem 0.8rem !important;
+            border-radius: 6px;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: #fff !important;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .nav-btn {
+            background: var(--primary);
+            color: #fff !important;
+            border-radius: 8px;
+            padding: 0.4rem 1rem !important;
+            font-weight: 600;
+        }
+
+        .nav-btn:hover {
+            background: var(--primary-dark) !important;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .card-header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            border-radius: 12px 12px 0 0 !important;
+            font-weight: 600;
+        }
+
+        .badge-role-driver { background: #dbeafe; color: #1d4ed8; }
+        .badge-role-passenger { background: #dcfce7; color: #166534; }
+        .badge-role-admin { background: #fef3c7; color: #92400e; }
+
+        .status-scheduled { background: #dbeafe; color: #1e40af; }
+        .status-active { background: #d1fae5; color: #065f46; }
+        .status-completed { background: #f1f5f9; color: #475569; }
+        .status-cancelled { background: #fee2e2; color: #991b1b; }
+
+        .ride-card {
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+        }
+
+        .ride-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+        }
+
+        .map-container {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border-color: var(--primary);
+            font-weight: 500;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1.5px solid #e2e8f0;
+            padding: 0.6rem 0.9rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        .hero-section {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1e40af 100%);
+            color: white;
+            padding: 3rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .progress {
+            border-radius: 10px;
+            height: 8px;
+        }
+
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+
+        .seat-indicator {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            border: 2px solid #e2e8f0;
+            text-align: center;
+            line-height: 24px;
+            font-size: 0.9rem;
+            margin: 2px;
+        }
+
+        .seat-indicator.occupied { background: #fee2e2; border-color: #ef4444; }
+        .seat-indicator.free { background: #d1fae5; border-color: #10b981; }
+
+        .simulation-info {
+            background: linear-gradient(135deg, #0f172a, #1e3a5f);
+            color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .car-icon {
+            font-size: 2.5rem;
+            animation: driving 0.6s ease-in-out infinite alternate;
+        }
+
+        @keyframes driving {
+            from { transform: translateY(0); }
+            to { transform: translateY(-4px); }
+        }
+
+        footer {
+            background: #0f172a;
+            color: rgba(255,255,255,0.6);
+            padding: 2rem 0;
+            margin-top: 4rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero-section { padding: 2rem 0; }
+            .stat-number { font-size: 1.8rem; }
+        }
+
+        .info-tooltip {
+            background: #1e293b;
+            color: #fff;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .passenger-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .office-card {
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s;
+            border: 1px solid #e2e8f0;
+        }
+
+        .office-card:hover { transform: translateY(-3px); }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 10px !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2) !important;
+        }
+
+        .custom-popup-office { border-left: 4px solid var(--primary); padding-left: 8px; }
+        .custom-popup-ride { border-left: 4px solid var(--success); padding-left: 8px; }
+        .custom-popup-car { border-left: 4px solid var(--warning); padding-left: 8px; }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'index' %}">
+            🚗 <span>Офис</span>Райд
+        </a>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span style="color:white"><i class="bi bi-list fs-4"></i></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link {% block nav_index %}{% endblock %}" href="{% url 'index' %}">
+                        <i class="bi bi-map me-1"></i>Карта
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% block nav_rides %}{% endblock %}" href="{% url 'ride_list' %}">
+                        <i class="bi bi-car-front me-1"></i>Поездки
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% block nav_offices %}{% endblock %}" href="{% url 'office_list' %}">
+                        <i class="bi bi-building me-1"></i>Офисы
+                    </a>
+                </li>
+                {% if user.is_authenticated %}
+                    {% if user.profile.is_driver or user.profile.is_admin or user.is_staff %}
+                    <li class="nav-item">
+                        <a class="nav-link nav-btn" href="{% url 'ride_create' %}">
+                            <i class="bi bi-plus-circle me-1"></i>Создать поездку
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endif %}
+            </ul>
+            <ul class="navbar-nav">
+                {% if user.is_authenticated %}
+                    {% if user.is_staff %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/" target="_blank">
+                            <i class="bi bi-gear me-1"></i>Админ
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle me-1"></i>
+                            {{ user.first_name|default:user.username }}
+                            <span class="badge ms-1 {% if user.profile.role == 'driver' %}badge-role-driver{% elif user.profile.role == 'admin' %}badge-role-admin{% else %}badge-role-passenger{% endif %}" style="font-size:0.65rem">
+                                {{ user.profile.get_role_display }}
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'profile' %}">
+                                <i class="bi bi-person me-2"></i>Профиль
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" action="{% url 'logout' %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-box-arrow-right me-2"></i>Выйти
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}">Войти</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-btn" href="{% url 'register' %}">Регистрация</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-3">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {% if message.tags == 'error' or message.tags == 'danger' %}<i class="bi bi-exclamation-triangle me-2"></i>
+            {% elif message.tags == 'success' %}<i class="bi bi-check-circle me-2"></i>
+            {% elif message.tags == 'info' %}<i class="bi bi-info-circle me-2"></i>
+            {% endif %}
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+</div>
+
+{% block content %}{% endblock %}
+
+<footer>
+    <div class="container text-center">
+        <p class="mb-1">🚗 <strong style="color:white">ОфисРайд</strong> — совместные поездки в офис</p>
+        <p class="mb-0 small">Экономьте время и деньги вместе с коллегами</p>
+    </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

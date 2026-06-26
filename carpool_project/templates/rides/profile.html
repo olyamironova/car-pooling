@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% block title %}Профиль — ОфисРайд{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card text-center mb-4">
+                <div class="card-body py-4">
+                    <div class="mb-3">
+                        {% if profile.avatar %}
+                            <img src="{{ profile.avatar.url }}" class="rounded-circle" style="width:100px;height:100px;object-fit:cover;border:4px solid #2563eb">
+                        {% else %}
+                            <div class="mx-auto d-flex align-items-center justify-content-center"
+                                 style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;font-size:2.5rem;font-weight:700;border:4px solid #dbeafe">
+                                {{ user.first_name|first|default:user.username|first|upper }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <h5 class="fw-bold mb-1">{{ user.get_full_name|default:user.username }}</h5>
+                    <p class="text-muted small mb-2">@{{ user.username }}</p>
+
+                    <span class="badge fs-6 py-2 px-3
+                        {% if profile.role == 'driver' %}bg-primary
+                        {% elif profile.role == 'admin' %}bg-warning text-dark
+                        {% else %}bg-success
+                        {% endif %}">
+                        {% if profile.role == 'driver' %}🚗 Водитель
+                        {% elif profile.role == 'admin' %}⚙️ Администратор
+                        {% else %}🧍 Пассажир{% endif %}
+                    </span>
+
+                    {% if profile.city %}
+                    <div class="mt-2 text-muted small">
+                        <i class="bi bi-geo-alt me-1"></i>{{ profile.city }}
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-2 mt-3">
+                        <div class="col-4">
+                            <div class="p-2 bg-light rounded">
+                                <div class="fw-bold text-primary">{{ profile.rating }}</div>
+                                <div class="text-muted" style="font-size:0.65rem">Рейтинг</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 bg-light rounded">
+                                <div class="fw-bold text-primary">{{ rides_as_driver|length }}</div>
+                                <div class="text-muted" style="font-size:0.65rem">Поездок</div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="p-2 bg-light rounded">
+                                <div class="fw-bold text-primary">{{ rides_as_passenger|length }}</div>
+                                <div class="text-muted" style="font-size:0.65rem">Как пасс.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if profile.is_driver %}
+            <div class="card mb-4">
+                <div class="card-header py-2">
+                    <i class="bi bi-car-front text-primary me-2"></i><strong>Автомобиль</strong>
+                </div>
+                <div class="card-body">
+                    {% if profile.car_model %}
+                    <p class="mb-1"><i class="bi bi-car-front me-2 text-muted"></i><strong>{{ profile.car_model }}</strong></p>
+                    {% endif %}
+                    {% if profile.car_plate %}
+                    <p class="mb-1"><i class="bi bi-card-text me-2 text-muted"></i>{{ profile.car_plate }}</p>
+                    {% endif %}
+                    <p class="mb-0"><i class="bi bi-people me-2 text-muted"></i>{{ profile.car_seats }} мест для пассажиров</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Edit Form -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-pencil text-primary me-2"></i><strong>Редактировать профиль</strong>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Имя</label>
+                                <input type="text" name="first_name" class="form-control"
+                                       value="{{ form.first_name.value|default:'' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Фамилия</label>
+                                <input type="text" name="last_name" class="form-control"
+                                       value="{{ form.last_name.value|default:'' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Email</label>
+                                <input type="email" name="email" class="form-control"
+                                       value="{{ form.email.value|default:'' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Телефон</label>
+                                <input type="text" name="phone" class="form-control"
+                                       value="{{ profile.phone|default:'' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Город</label>
+                                <input type="text" name="city" class="form-control"
+                                       value="{{ profile.city|default:'' }}" placeholder="Москва">
+                                <small class="text-muted">Определяет доступные для вас поездки</small>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Домашний адрес</label>
+                                <div class="input-group">
+                                    <input type="text" name="home_address" id="homeAddr" class="form-control"
+                                           value="{{ profile.home_address|default:'' }}" placeholder="Улица, дом">
+                                    <button type="button" class="btn btn-outline-primary" onclick="geocodeHome()">
+                                        <i class="bi bi-search"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="home_lat" id="homeLat" value="{{ profile.home_lat|default:'' }}">
+                                <input type="hidden" name="home_lon" id="homeLon" value="{{ profile.home_lon|default:'' }}">
+                                <div id="homeStatus" class="small mt-1"></div>
+                            </div>
+
+                            {% if profile.is_driver %}
+                            <div class="col-12"><hr><h6 class="fw-bold"><i class="bi bi-car-front text-primary me-2"></i>Автомобиль</h6></div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Модель</label>
+                                <input type="text" name="car_model" class="form-control"
+                                       value="{{ profile.car_model|default:'' }}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Гос. номер</label>
+                                <input type="text" name="car_plate" class="form-control"
+                                       value="{{ profile.car_plate|default:'' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Мест для пассажиров</label>
+                                <input type="number" name="car_seats" class="form-control"
+                                       value="{{ profile.car_seats|default:3 }}" min="1" max="8">
+                            </div>
+                            {% endif %}
+
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Аватар</label>
+                                <input type="file" name="avatar" class="form-control" accept="image/*">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary fw-semibold w-100 mt-4">
+                            <i class="bi bi-check-circle me-2"></i>Сохранить изменения
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {% if rides_as_driver %}
+            <div class="card mb-4">
+                <div class="card-header py-3">
+                    <i class="bi bi-clock-history text-primary me-2"></i>
+                    <strong>Мои поездки как водитель</strong>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for ride in rides_as_driver %}
+                    <a href="{% url 'ride_detail' ride.pk %}" class="list-group-item list-group-item-action px-3 py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="small fw-semibold">→ {{ ride.office.name }}</div>
+                                <div class="text-muted" style="font-size:0.75rem">
+                                    {{ ride.departure_time|date:"d.m.Y H:i" }}
+                                    {% if ride.departure_city %}• {{ ride.departure_city }}{% endif %}
+                                </div>
+                            </div>
+                            <span class="badge status-{{ ride.status }}">{{ ride.get_status_display }}</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if rides_as_passenger %}
+            <div class="card">
+                <div class="card-header py-3">
+                    <i class="bi bi-person-check text-primary me-2"></i>
+                    <strong>Мои поездки как пассажир</strong>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for rp in rides_as_passenger %}
+                    <a href="{% url 'ride_detail' rp.ride.pk %}" class="list-group-item list-group-item-action px-3 py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="small fw-semibold">
+                                    С {{ rp.ride.driver.get_full_name|default:rp.ride.driver.username }}
+                                    → {{ rp.ride.office.name }}
+                                </div>
+                                <div class="text-muted" style="font-size:0.75rem">
+                                    {{ rp.ride.departure_time|date:"d.m.Y H:i" }}
+                                </div>
+                            </div>
+                            <span class="badge status-{{ rp.ride.status }}">{{ rp.ride.get_status_display }}</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function geocodeHome() {
+    const address = document.getElementById('homeAddr').value;
+    if (!address) return;
+    const status = document.getElementById('homeStatus');
+    status.innerHTML = '<span class="text-muted">Поиск...</span>';
+    try {
+        const resp = await fetch(`/api/geocode/?address=${encodeURIComponent(address)}`);
+        const data = await resp.json();
+        if (data.lat) {
+            document.getElementById('homeLat').value = data.lat;
+            document.getElementById('homeLon').value = data.lon;
+            status.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Координаты найдены</span>';
+        }
+    } catch(e) {}
+}
+</script>
+{% endblock %}

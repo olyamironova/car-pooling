@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} офис — ОфисРайд{% endblock %}
+{% block nav_offices %}active{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header py-3">
+                    <i class="bi bi-building text-primary me-2"></i>
+                    <strong>{{ action }} офис</strong>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Название офиса</label>
+                            {{ form.name }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Город</label>
+                            {{ form.city }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Адрес</label>
+                            <div class="input-group">
+                                {{ form.address }}
+                                <button type="button" class="btn btn-outline-primary" onclick="geocodeOffice()">
+                                    <i class="bi bi-search me-1"></i>Найти
+                                </button>
+                            </div>
+                            {{ form.lat }}
+                            {{ form.lon }}
+                            <div id="geocodeStatus" class="small mt-1"></div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Описание</label>
+                            {{ form.description }}
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Фото</label>
+                            {{ form.photo }}
+                        </div>
+
+                        <div class="mb-4 form-check">
+                            {{ form.is_active }}
+                            <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+                                Офис активен
+                            </label>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary fw-semibold flex-grow-1">
+                                <i class="bi bi-check-circle me-2"></i>{{ action }}
+                            </button>
+                            <a href="{% url 'office_list' %}" class="btn btn-outline-secondary fw-semibold">
+                                Отмена
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card sticky-top" style="top:80px">
+                <div class="card-header py-3">
+                    <i class="bi bi-map text-primary me-2"></i><strong>Укажите на карте</strong>
+                </div>
+                <div class="card-body p-0">
+                    <div id="officeMap" style="height: 420px; border-radius: 0 0 12px 12px;"></div>
+                </div>
+                <div class="card-footer text-muted small">
+                    <i class="bi bi-hand-index me-1"></i>
+                    Кликните на карте чтобы указать точное местоположение офиса
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentLat = parseFloat(document.querySelector('input[name="lat"]').value) || 55.7558;
+let currentLon = parseFloat(document.querySelector('input[name="lon"]').value) || 37.6173;
+
+const map = L.map('officeMap').setView([currentLat, currentLon], currentLat !== 55.7558 ? 15 : 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+}).addTo(map);
+
+const officeIcon = L.divIcon({
+    html: '<div style="background:#2563eb;border-radius:8px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid white;box-shadow:0 3px 10px rgba(0,0,0,.3)">🏢</div>',
+    iconSize: [36, 36], iconAnchor: [18, 36], className: ''
+});
+
+let marker = null;
+if (currentLat && currentLon) {
+    marker = L.marker([currentLat, currentLon], {icon: officeIcon}).addTo(map);
+}
+
+function updateMarker(lat, lon) {
+    if (marker) marker.remove();
+    marker = L.marker([lat, lon], {icon: officeIcon}).addTo(map);
+    document.querySelector('input[name="lat"]').value = lat;
+    document.querySelector('input[name="lon"]').value = lon;
+}
+
+map.on('click', function(e) {
+    const lat = e.latlng.lat.toFixed(6);
+    const lon = e.latlng.lng.toFixed(6);
+    updateMarker(lat, lon);
+    document.getElementById('geocodeStatus').innerHTML =
+        `<span class="text-info"><i class="bi bi-pin-map me-1"></i>Точка: ${lat}, ${lon}</span>`;
+});
+
+async function geocodeOffice() {
+    const address = document.querySelector('input[name="address"]').value;
+    const city = document.querySelector('input[name="city"]').value;
+    if (!address) return;
+
+    const query = city ? `${address}, ${city}` : address;
+    const status = document.getElementById('geocodeStatus');
+    status.innerHTML = '<span class="text-muted">Поиск...</span>';
+
+    try {
+        const resp = await fetch(`/api/geocode/?address=${encodeURIComponent(query)}`);
+        const data = await resp.json();
+        if (data.lat) {
+            updateMarker(parseFloat(data.lat), parseFloat(data.lon));
+            map.flyTo([data.lat, data.lon], 16, {duration: 1});
+            status.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Найдено: ${data.display_name.substring(0, 50)}...</span>`;
+        } else {
+            status.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Не найдено</span>';
+        }
+    } catch(e) {
+        status.innerHTML = '<span class="text-danger">Ошибка запроса</span>';
+    }
+}
+</script>
+{% endblock %}
